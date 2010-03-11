@@ -3170,7 +3170,6 @@ sortlines_thread (void *data)
         queue_insert (state->merge_queue, su->node);
     }
 
-  fprintf (stderr, "doing merge loop\n");
   merge_loop (state->merge_queue, state->total_lines, state->tfp, state->temp_output);
 
   return NULL;
@@ -3198,7 +3197,6 @@ sortlines_join_threads (struct sort_state *state)
       thread = ia_queue_pop (state->thread_pool);
 
       xpthread_join (*thread, NULL);
-      fprintf (stderr, "+ joined a thread!\n");
       free (thread);
     }
 }
@@ -3645,7 +3643,9 @@ struct sort_multidisk_thread_args
   size_t ndevs;
   size_t *nfiles;
   ssize_t *work_units;
+  struct sort_state *sort_states;
   size_t nthreads;
+  size_t max_threads;
   xpthread_mutex_t mutex;
 };
 
@@ -3663,6 +3663,8 @@ sort_multidisk_thread (void *data)
   size_t *nfiles = args->nfiles;
   ssize_t *work_units = args->work_units;
   size_t nthreads = args->nthreads;
+  size_t max_threads = args->max_threads;
+  struct sort_state *sort_states = args->sort_states;
   size_t cur_dev = 0;
 
   while (cur_dev < ndevs)
@@ -3670,6 +3672,7 @@ sort_multidisk_thread (void *data)
       char **files = NULL;
       char **single_file = NULL;
       ssize_t available_work_units = 1;
+      struct sort_state *state;
 
       // Find next available list of device files to sort
       xpthread_mutex_lock (&args->mutex);
@@ -3685,6 +3688,8 @@ sort_multidisk_thread (void *data)
 
       if (NULL == files)
         return NULL;
+
+      state = &sort_states[cur_dev];
 
       // Sort each file on the current device
       single_file = files + nfiles[cur_dev];
@@ -3704,11 +3709,8 @@ sort_multidisk_thread (void *data)
 
           xpthread_mutex_unlock (&args->mutex);
 
-          struct sort_state state;
-          sortlines_init (&state);
           do_sort (single_file, 1, NULL, available_work_units,
-                   available_work_units, false, &state);
-          sortlines_close (&state);
+                   max_threads, false, state);
         }
 
       // Free the device list here, no one else has a reference to it anymore
@@ -3727,6 +3729,7 @@ sort_multidisk_thread (void *data)
               if (work_units[j] < 0)
                 continue;
               work_units[j] += available_work_units / nthreads;
+              sortlines_add_threads (&sort_states[j], available_work_units / nthreads);
               i++;
             }
         }
@@ -3740,6 +3743,7 @@ sort_multidisk_thread (void *data)
               if (work_units[j] < 0)
                 continue;
               work_units[j]++;
+              sortlines_add_threads (&sort_states[j], 1);
               i++;
             }
         }
@@ -3881,7 +3885,11 @@ sort_multidisk (char * const *files, size_t nfiles, char const *output_file,
           xpthread_t *threads = xnmalloc (nthreads_to_use, sizeof *threads);
           unsigned long int tid = 0;
           ssize_t *work_units = xcalloc (ndevs, sizeof *work_units);
+          struct sort_state *sort_states = xnmalloc (ndevs, sizeof *sort_states);
           size_t global_sort_size = sort_size;
+
+          for (tid = 0; tid < ndevs; tid++)
+            sortlines_init (&sort_states[tid]);
 
           // Evenly distribute available thread work units to device file
           // groups. Only distribute to the first nthreads_to_use.
@@ -3899,7 +3907,9 @@ sort_multidisk (char * const *files, size_t nfiles, char const *output_file,
             .ndevs = ndevs,
             .nfiles = nfiles_on_dev,
             .work_units = work_units,
-            .nthreads = nthreads_to_use};
+            .nthreads = nthreads_to_use,
+            .max_threads = nthreads,
+            .sort_states = sort_states};
           xpthread_mutex_init (&args.mutex, NULL);
 
           // Spawn threads to sort the device lists. The threads will keep
