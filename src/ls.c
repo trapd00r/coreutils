@@ -592,9 +592,9 @@ static struct bin_str color_indicator[] =
     { LEN_STR_PAIR ("01;35") },		/* do: Door: bright magenta */
     { LEN_STR_PAIR ("37;41") },		/* su: setuid: white on red */
     { LEN_STR_PAIR ("30;43") },		/* sg: setgid: black on yellow */
-    { LEN_STR_PAIR ("37;44") },		/* st: sticky: black on blue */
-    { LEN_STR_PAIR ("34;42") },		/* ow: other-writable: blue on green */
-    { LEN_STR_PAIR ("30;42") },		/* tw: ow w/ sticky: black on green */
+    { LEN_STR_PAIR ("01;35") },		/* st: sticky: black on blue */
+    { LEN_STR_PAIR ("01;35") },		/* ow: other-writable: blue on green */
+    { LEN_STR_PAIR ("01;35") },		/* tw: ow w/ sticky: black on green */
     { LEN_STR_PAIR ("30;41") },		/* ca: black on red */
     { 0, NULL },			/* mh: disabled by default */
     { LEN_STR_PAIR ("\033[K") },	/* cl: clear to end of line */
@@ -2014,7 +2014,7 @@ decode_switches (int argc, char **argv)
           {
           case full_iso_time_style:
             long_time_format[0] = long_time_format[1] =
-              "%Y-%m-%d %H:%M:%S.%N %z";
+              "▕";
             break;
 
           case long_iso_time_style:
