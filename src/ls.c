@@ -2014,7 +2014,7 @@ decode_switches (int argc, char **argv)
           {
           case full_iso_time_style:
             long_time_format[0] = long_time_format[1] =
-              "▕";
+              "▎";
             break;
 
           case long_iso_time_style:
